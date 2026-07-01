@@ -1,5 +1,7 @@
 # Hyperliquid Copy Trading Bot — Perpetual DEX Trading Bot for Hyperliquid Perps
 
+https://github.com/user-attachments/assets/d30201f1-546b-4a11-ae88-5a87a6b2a316
+
 > **The most complete open-source Hyperliquid copy trading bot built with TypeScript & Node.js.**
 > Mirror any trader's perpetual futures positions on Hyperliquid in real-time via WebSocket.
 
@@ -59,6 +61,7 @@ hyperliquid-copy-trading-bot/
 │   ├── services/
 │   │   ├── hlClient.ts        # Hyperliquid SDK wrapper (Info + Exchange + Subscription)
 │   │   ├── riskManager.ts     # Risk checks, daily loss tracking
+│   │   ├── kellySizer.ts       # Kelly-criterion position sizing (@zscdao/kelly)
 │   │   ├── orderExecutor.ts   # Order placement with retry logic
 │   │   ├── fillProcessor.ts   # Target fills → copied orders (open/close/leverage)
 │   │   ├── reconciler.ts      # Periodic position re-sync safety net
@@ -115,6 +118,13 @@ MAX_POSITION_SIZE_USD=1000   # max notional per position
 MAX_TOTAL_EXPOSURE_USD=5000  # max sum of all open notional
 MAX_LEVERAGE=10              # never exceed 10x
 
+# ── Kelly sizing (optional) ─────────────────────────────────────
+KELLY_ENABLED=false          # cap copies at the fractional-Kelly stake
+KELLY_FRACTION=0.5           # half-Kelly (recommended)
+KELLY_MAX_FRACTION=0.2       # never stake >20% of equity per copy
+KELLY_WINDOW=50              # rolling window of target trades
+KELLY_MIN_SAMPLES=10         # closes needed before Kelly engages
+
 # ── Risk ────────────────────────────────────────────────────────
 MAX_DAILY_LOSS_USD=500       # pause the perp bot if daily loss hits $500
 
@@ -147,6 +157,11 @@ npm start
 | `MAX_POSITION_SIZE_USD` | `1000` | Max notional (USD) per single copied position |
 | `MAX_TOTAL_EXPOSURE_USD` | `5000` | Max total open notional across all perp positions |
 | `MAX_LEVERAGE` | `10` | Leverage ceiling — the copy trading bot never exceeds this |
+| `KELLY_ENABLED` | `false` | Enable Kelly-criterion sizing (caps each copy at the fractional-Kelly stake) |
+| `KELLY_FRACTION` | `0.5` | Fractional-Kelly multiplier in (0, 1]. `0.5` = half-Kelly (recommended) |
+| `KELLY_MAX_FRACTION` | `0.2` | Hard cap on the equity fraction staked per copy, in (0, 1] |
+| `KELLY_WINDOW` | `50` | Rolling window of the target's recent trades used to estimate edge |
+| `KELLY_MIN_SAMPLES` | `10` | Minimum target closes before Kelly engages (else it uses the mirror) |
 | `STOP_LOSS_PERCENT` | `0` | Auto stop-loss % from entry price (0 = disabled) |
 | `STOP_LOSS_CHECK_INTERVAL_MS` | `5000` | How often (ms) to check managed positions for stop-loss breach |
 | `MAX_DAILY_LOSS_USD` | `0` | Pause the bot if daily realized loss exceeds this (0 = disabled) |
@@ -181,8 +196,27 @@ Every time the target gets a trade fill on the Hyperliquid perp DEX, the bot rec
 **Opening a perp position** (`dir` contains `"Open"`):
 ```
 copySize = fill.sz × SIZE_MULTIPLIER
+copySize = min(copySize, kellyStake / currentMidPrice)   ← only when KELLY_ENABLED
 copySize = min(copySize, MAX_POSITION_SIZE_USD / currentMidPrice)
 ```
+
+When `KELLY_ENABLED=true`, the bot sizes with the **Kelly criterion** via the
+[`@zscdao/kelly`](../kelly) module. It watches the target trader's realised
+close PnL, estimates their edge `{ winProbability, payoffRatio }` over a rolling
+`KELLY_WINDOW`, and converts your live account value into the fractional-Kelly
+stake:
+
+```
+f*        = p − (1 − p) / b                        ← raw Kelly fraction
+stake     = accountValue × f* × KELLY_FRACTION      ← capped at KELLY_MAX_FRACTION
+copySize  = min(mirrorSize, stake / midPrice)       ← Kelly only ever shrinks a copy
+```
+
+Kelly acts as a **cap**: it never sizes above the mirrored trade or
+`MAX_POSITION_SIZE_USD`, and it skips the open entirely when the observed edge
+is non-positive (`f* ≤ 0`). Until `KELLY_MIN_SAMPLES` closes have accumulated
+(seeded at startup from the target's recent fills), sizing falls back to the
+plain `SIZE_MULTIPLIER` mirror.
 
 **Closing a perp position** (`dir` contains `"Close"`):
 ```
@@ -225,6 +259,7 @@ The **perp trading bot** includes multiple layers of risk control:
 | Max position size | `MAX_POSITION_SIZE_USD` | Rejects any copy order where notional > limit |
 | Max total exposure | `MAX_TOTAL_EXPOSURE_USD` | Rejects if adding this position would push total notional over limit |
 | Max leverage | `MAX_LEVERAGE` | Caps leverage for all copied perpetual positions |
+| Kelly sizing | `KELLY_ENABLED` | Caps each copy at the fractional-Kelly stake of equity; skips opens with no edge |
 | Daily loss limit | `MAX_DAILY_LOSS_USD` | Pauses the entire bot until midnight UTC if cumulative realized loss hits limit |
 | Minimum notional | Hard-coded $5 | Skips micro-trades that would generate dust positions |
 | Retry logic | Built-in | All API calls retry up to 3× with exponential back-off |
