@@ -1,9 +1,9 @@
-import { edgeFromReturns, kellyStakeFromReturns } from '@zscdao/kelly';
+import { edgeFromReturns, kellyStakeFromReturns } from 'kelly-stake';
 import { KellyConfig, TraderFill } from '../types';
 import { getLogger } from '../utils/logger';
 
 /**
- * Bankroll-aware position sizing via the Kelly criterion (`@zscdao/kelly`).
+ * Bankroll-aware position sizing via the Kelly criterion (`kelly-stake`).
  *
  * The bot cannot know its own forward edge, but it *can* observe the target
  * trader's realised results. Every time the target closes (part of) a position,

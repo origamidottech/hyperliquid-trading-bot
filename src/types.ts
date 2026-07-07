@@ -39,7 +39,7 @@ export interface BotConfig {
 }
 
 /**
- * Kelly-criterion sizing, backed by the @zscdao/kelly module. When enabled, the
+ * Kelly-criterion sizing, backed by the kelly-stake module. When enabled, the
  * bot estimates the target trader's edge from their realised close PnL and caps
  * each copied open to the fractional-Kelly stake of our account value.
  */

@@ -1,5 +1,7 @@
 # Hyperliquid Copy Trading Bot — Perpetual DEX Trading Bot for Hyperliquid Perps
 
+**English** · [Русский](README.ru.md) · [中文](README.zh.md)
+
 https://github.com/user-attachments/assets/d30201f1-546b-4a11-ae88-5a87a6b2a316
 
 > **The most complete open-source Hyperliquid copy trading bot built with TypeScript & Node.js.**
@@ -201,7 +203,7 @@ copySize = min(copySize, MAX_POSITION_SIZE_USD / currentMidPrice)
 ```
 
 When `KELLY_ENABLED=true`, the bot sizes with the **Kelly criterion** via the
-[`@zscdao/kelly`](../kelly) module. It watches the target trader's realised
+[`kelly-stake`](https://www.npmjs.com/package/kelly-stake) module. It watches the target trader's realised
 close PnL, estimates their edge `{ winProbability, payoffRatio }` over a rolling
 `KELLY_WINDOW`, and converts your live account value into the fractional-Kelly
 stake:
